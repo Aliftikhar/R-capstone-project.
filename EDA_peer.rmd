@@ -1,0 +1,222 @@
+---
+title: "Peer Assessment I"
+output:
+  html_document: 
+    pandoc_args: [
+      "--number-sections",
+    ]
+---
+
+
+First, let us load the data and necessary packages:
+
+
+
+
+```{r load, message = FALSE}
+load("ames_train.Rdata")
+library(MASS)
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(tidyverse)
+```
+
+#
+Make a labeled histogram (with 30 bins) of the ages of the houses in the data set, and describe the distribution.
+
+
+```{r Q1}
+# type your code for Question 1 here, and Knit
+ames_train %>%
+  mutate(age=max(Year.Built)- Year.Built)%>%
+  ggplot(aes(x=age))+
+  geom_histogram(bins = 30)+
+  labs(title = "Distributions of House's Age",y="No. of Houses", x="Age of Houses since 2010")
+```
+
+
+* * *
+
+
+The distribution is multi-modal because histogram shows couple of high counts at certain ages. Histogram is righ-skewed. No. of houses decrease with the increase in the age of th e house.
+
+
+* * *
+
+
+#
+The mantra in real estate is "Location, Location, Location!" Make a graphical display that relates a home price to its neighborhood in Ames, Iowa. Which summary statistics are most appropriate to use for determining the most expensive, least expensive, and most heterogeneous (having the most variation in housing price) neighborhoods? Report which neighborhoods these are based on the summary statistics of your choice. Report the value of your chosen summary statistics for these neighborhoods.
+
+
+```{r Q2}
+# type your code for Question 2 here, and Knit
+ames_train_loc <- ames_train%>%
+  select(price, Neighborhood)%>%
+  group_by(Neighborhood)%>%
+  summarise(median=median(price), max=max(price), min=min(price), sd=sd(price))
+print(arrange(ames_train_loc, desc(max)))
+```
+```{r}
+print(arrange(ames_train_loc, min))
+```
+```{r}
+print(arrange(ames_train_loc, desc(median)))
+```
+```{r}
+ggplot(ames_train, aes(y=price, x=reorder(Neighborhood, price, median),fill=Neighborhood),main="Price of Neighborhood", xlim="Neighborhood", ylim="price")+geom_boxplot()+coord_flip()
+```
+
+
+* * *
+
+Stone Brook is the most espensive neighborhood with a home price of $340691.50. The reason for this is to determine the prices range of neighborhood house price we look on the centre of measure to compare the typical house price in each neighborhood. Mean and Median are the two most common measure of centre. But here in the data we have skewed data so mean is biased as bacause data is not distributed normally. So the median is a better measure of centre as it is not sensitive to skew. For the measure of variability we look on inter quartile because standard deviation is sensitive to skewness. Meadow Village has least expensive price in neighborhood. 
+
+
+* * *
+
+# 
+
+Which variable has the largest number of missing values? Explain why it makes sense that there are so many missing values for this variable.
+
+```{r Q3}
+# type your code for Question 3 here, and Knit
+ames_train_null <- summary(is.na(ames_train))[TRUE]
+summary(ames_train$Pool.QC)
+
+```
+
+
+* * *
+
+Variable with the most no. of missing values is Pool Quality.
+
+
+* * *
+
+#
+
+We want to predict the natural log of the home prices. Candidate explanatory variables are lot size in square feet (Lot.Area), slope of property (Land.Slope), original construction date (Year.Built), remodel date (Year.Remod.Add), and the number of bedrooms above grade (Bedroom.AbvGr). Pick a model selection or model averaging method covered in the Specialization, and describe how this method works. Then, use this method to find the best multiple regression model for predicting the natural log of the home prices.
+
+
+```{r Q4}
+# type your code for Question 4 here, and Knit
+model_fit_1=train(log(price)~ .,
+data=select(ames_train,price,Lot.Area,Land.Slope,Year.Built,Year.Remod.Add,Bedroom.AbvGr),
+method="leapForward",
+tuneLength=6,
+tuneGrid=data.frame(nvmax=c(1:6)),
+trConotrol=trainControl(method="repeatedcv", number=10, repeats=10, verboseIter=FALSE),
+.method="adjr2",
+trace=TRUE,
+metric="RMSE")
+```
+```{r}
+model_fit_1
+```
+
+* * *
+
+Adding explanatory variables one at a time and prdicting the response variable then comparing the adj R square value is forward selection method used in the modeling. Each explanatory variable is added at each time and compared the adj R square value, explanatory variable with highest adj R square value added to the model then other explanatory variables added.
+
+
+* * *
+
+#
+
+Which home has the largest squared residual in the previous analysis (Question 4)? Looking at all the variables in the data set, can you explain why this home stands out from the rest (what factors contribute to the high squared residual and why are those factors relevant)?
+
+
+```{r Q5}
+# type your code for Question 5 here, and Knit
+prediction=predict(model_fit_1)
+residual=(log(ames_train$price)-prediction)^2
+row=which.max(residual)
+paste("The predicted price for the house is",format(exp(predict(model_fit_1,ames_train[row,])),big.mark=","))
+```
+```{r}
+select(ames_train[row,],price,Lot.Area,Land.Slope,Year.Built,Year.Remod.Add,Bedroom.AbvGr)
+```
+
+* * *
+Model predict price for PID 902207130 of $103,176.20 is an outlier. Actual value for this house is of $12,789. 
+
+
+
+* * *
+
+#
+
+Use the same model selection method you chose in Question 4 to again find the best multiple regression model to predict the natural log of home prices, but this time **replacing Lot.Area with log(Lot.Area)**. Do you arrive at a model including the same set of predictors?
+
+
+```{r Q6}
+# type your code for Question 6 here, and Knit
+ames_train$`log(Lot.Area)`=log(ames_train$Lot.Area)
+
+model_fit_2=train(log(price) ~ . -Lot.Area,
+                data = select(ames_train,price,Lot.Area,Land.Slope,Year.Built,Year.Remod.Add,Bedroom.AbvGr, `log(Lot.Area)`),
+                method = "leapForward",
+                tuneLength = 6,
+                tuneGrid = data.frame(nvmax=c(1:6)),
+                trControl = trainControl(method = "repeatedcv", number = 10, repeats = 10, verboseIter = FALSE),
+                .method="adjr2",
+                trace = TRUE,
+                metric = "RMSE"
+              )
+```
+
+```{r}
+model_fit_2
+```
+
+With the same set of explanatory variables Land.Slope split into three variables. Model predicts the same predictors.
+
+* * *
+
+#
+
+Do you think it is better to log transform Lot.Area, in terms of assumptions for linear regression? Make graphs of the predicted values of log home price versus the true values of log home price for the regression models selected for Lot.Area and log(Lot.Area). Referencing these two plots, provide a written support that includes a quantitative justification for your answer in the first part of question 7.
+
+```{r Q7}
+# type your code for Question 7 here, and Knit
+model_fit_1$finalModel$xNames
+```
+```{r}
+model_fit_1$results[6,]
+```
+```{r}
+model_fit_2$finalModel$xNames
+```
+```{r}
+model_fit_2$results[6,]
+```
+```{r}
+true=log(ames_train$price)
+prediction_1=predict(model_fit_1)
+prediction_2=predict(model_fit_2)
+Plot = data.frame(true=true, pred = c(prediction_1, prediction_2), prediction=c(rep(c("Lot.Area"),1000),rep(c("log(Lot.Area))"),1000)), diff=prediction_1-prediction_2)
+ggplot(data=Plot, aes(x = true, y = pred, color = prediction)) +
+    geom_point(,alpha = 0.4) +
+    geom_abline(slope=1, intercept=0) +
+    theme(legend.position=c(0.2, 0.8), plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Predicted log(Price) vs Actual log(Price) for Both Models", y = "Predicted log(Price)", x = "Actual log(Price)")
+                
+```
+
+
+```{r}
+statsr::inference(diff, data=Plot, type="ht", statistic = "mean", method="theoretical", alternative = "twosided", null = 0)
+```
+
+* * *
+
+Log transformation is the best choice as it has a slightly lower prediction error and better linear fit.
+Model variables for model_fit_1 and model_fit_2 has right predictor.
+
+From 1000 data points it is very difficult to say that this data has enough proof to add furhter complexity to the model by log transformation to the LOt.Area variable beacuse there is not a statistically significant difference in the distribution of results for model_fit_1 and model_fit_2.
+
+
+
+* * *
+###
